@@ -1,0 +1,8 @@
+.bundle
+.rbx
+.ruby-gemset
+.ruby-version
+.yardoc
+Gemfile.lock
+doc
+pkg

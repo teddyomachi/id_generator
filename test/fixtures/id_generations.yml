@@ -1,0 +1,15 @@
+# Read about fixtures at http://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  uid_base: MyString
+  password_base: MyString
+  altid_base: MyString
+  withdrawn: false
+  wddate: 
+
+two:
+  uid_base: MyString
+  password_base: MyString
+  altid_base: MyString
+  withdrawn: false
+  wddate: 

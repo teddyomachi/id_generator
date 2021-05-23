@@ -1,0 +1,2 @@
+class IdGeneration < ApplicationRecord
+end

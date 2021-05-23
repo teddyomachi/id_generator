@@ -1,0 +1,5 @@
+current directory: /Users/omachi.kazuhiro/Development/camus-idgenerator/vendor/bundle/ruby/2.6.0/gems/ruby-debug-ide-0.7.2/ext
+/Users/omachi.kazuhiro/.rbenv/versions/2.6.6/bin/ruby mkrf_conf.rb
+
+current directory: /Users/omachi.kazuhiro/Development/camus-idgenerator/vendor/bundle/ruby/2.6.0/gems/ruby-debug-ide-0.7.2/ext
+/Users/omachi.kazuhiro/.rbenv/versions/2.6.6/bin/ruby -rrubygems /Users/omachi.kazuhiro/Development/camus-idgenerator/vendor/bundle/ruby/2.6.0/gems/rake-13.0.3/exe/rake RUBYARCHDIR\=/Users/omachi.kazuhiro/Development/camus-idgenerator/vendor/bundle/ruby/2.6.0/extensions/x86_64-darwin-20/2.6.0/ruby-debug-ide-0.7.2 RUBYLIBDIR\=/Users/omachi.kazuhiro/Development/camus-idgenerator/vendor/bundle/ruby/2.6.0/extensions/x86_64-darwin-20/2.6.0/ruby-debug-ide-0.7.2

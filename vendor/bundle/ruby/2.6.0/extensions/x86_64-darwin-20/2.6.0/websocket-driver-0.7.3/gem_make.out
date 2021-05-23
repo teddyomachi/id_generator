@@ -1,0 +1,15 @@
+current directory: /Users/omachi.kazuhiro/Development/camus-idgenerator/vendor/bundle/ruby/2.6.0/gems/websocket-driver-0.7.3/ext/websocket-driver
+/Users/omachi.kazuhiro/.rbenv/versions/2.6.6/bin/ruby -I /Users/omachi.kazuhiro/.rbenv/versions/2.6.6/lib/ruby/2.6.0 -r ./siteconf20210523-65151-1ppjmon.rb extconf.rb
+creating Makefile
+
+current directory: /Users/omachi.kazuhiro/Development/camus-idgenerator/vendor/bundle/ruby/2.6.0/gems/websocket-driver-0.7.3/ext/websocket-driver
+make "DESTDIR=" clean
+
+current directory: /Users/omachi.kazuhiro/Development/camus-idgenerator/vendor/bundle/ruby/2.6.0/gems/websocket-driver-0.7.3/ext/websocket-driver
+make "DESTDIR="
+compiling websocket_mask.c
+linking shared-object websocket_mask.bundle
+
+current directory: /Users/omachi.kazuhiro/Development/camus-idgenerator/vendor/bundle/ruby/2.6.0/gems/websocket-driver-0.7.3/ext/websocket-driver
+make "DESTDIR=" install
+/usr/bin/install -c -m 0755 websocket_mask.bundle ./.gem.20210523-65151-1x8zz7s
