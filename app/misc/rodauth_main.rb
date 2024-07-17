@@ -1,13 +1,12 @@
-require 'sequel/core'
+require "sequel/core"
 
 class RodauthMain < Rodauth::Rails::Auth
   configure do
     # List of authentication features that are loaded.
     enable :create_account, :verify_account, :verify_account_grace_period,
-           :login, :logout, :remember,
-           :reset_password, :change_password, :change_password_notify,
-           :change_login, :verify_login_change, :close_account,
-           :otp
+      :login, :logout, :remember,
+      :reset_password, :change_password, :change_password_notify,
+      :change_login, :verify_login_change, :close_account
 
     # See the Rodauth documentation for the list of available config options:
     # http://rodauth.jeremyevans.net/documentation.html
@@ -17,7 +16,7 @@ class RodauthMain < Rodauth::Rails::Auth
     db Sequel.postgres(extensions: :activerecord_connection, keep_reference: false)
 
     # Avoid DB query that checks accounts table schema at boot time.
-    convert_token_id_to_integer? { Account.columns_hash['id'].type == :integer }
+    convert_token_id_to_integer? { Account.columns_hash["id"].type == :integer }
 
     # Change prefix of table and foreign key column names from default "account"
     # accounts_table :users
@@ -28,7 +27,7 @@ class RodauthMain < Rodauth::Rails::Auth
 
     # The secret key used for hashing public-facing tokens for various features.
     # Defaults to Rails `secret_key_base`, but you can use your own secret key.
-    # hmac_secret "372477de968f94c3455f916ccb87b46d2e142696a8aee5a7820e1a4885e4b5cde36c77473042f598f8b6f27365d46c60b2c3e7508914aca7f9b75639993088dd"
+    # hmac_secret "54cfac5dbc476d72a07c5caba0c9d0f0f9bf2a6ee45214b98785182b33dff9f4565c5d5ab24890f67f947e3abf8de231bc1c3df681648c928b5af8e6111d3683"
 
     # Use path prefix for all routes.
     # prefix "/auth"
@@ -49,8 +48,8 @@ class RodauthMain < Rodauth::Rails::Auth
     verify_account_set_password? false
 
     # Change some default param keys.
-    login_param 'email'
-    login_confirm_param 'email-confirm'
+    login_param "email"
+    login_confirm_param "email-confirm"
     # password_confirm_param "confirm_password"
 
     # Redirect back to originally requested location after authentication.
@@ -156,7 +155,7 @@ class RodauthMain < Rodauth::Rails::Auth
 
     # ==> Redirects
     # Redirect to home page after logout.
-    logout_redirect '/'
+    logout_redirect "/"
 
     # Redirect to wherever login redirects to after account verification.
     verify_account_redirect { login_redirect }
