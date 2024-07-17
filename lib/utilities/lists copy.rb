@@ -162,7 +162,7 @@ class Stack
   end
   
   # スタックは空か？
-  def empty?
+  def blank?
     @size == 0
   end
 end
@@ -204,7 +204,7 @@ class Queue
   end
   
   # キューは空か？
-  def empty?
+  def blank?
     @size == 0
   end
 end
@@ -216,7 +216,7 @@ if __FILE__ == $0
   5.times do |x|
     print "push ", a.push(x), "\n"
   end
-  while !a.empty?
+  while !a.blank?
     print "pop ", a.pop, "\n"
   end
 
@@ -225,7 +225,7 @@ if __FILE__ == $0
   5.times do |x|
     print "enqueue ", b.enqueue(x), "\n"
   end
-  while !b.empty?
+  while !b.blank?
     print "dequeue ", b.dequeue, "\n"
   end
 end

@@ -1,5 +1,7 @@
 {
   "name": "camus-idgenerator",
   "private": true,
-  "dependencies": {}
+  "devDependencies": {
+    "tailwindcss": "^3.4.6"
+  }
 }

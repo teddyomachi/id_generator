@@ -1,31 +1,97 @@
 {
-    // IntelliSense を使用して利用可能な属性を学べます。
-    // 既存の属性の説明をホバーして表示します。
-    // 詳細情報は次を確認してください: https://go.microsoft.com/fwlink/?linkid=830387
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Rails server",
-            "type": "Ruby",
+            "type": "rdbg",
+            "name": "W11 Run rails server",
+            "rdbgPath": "rdbg",
             "request": "launch",
-            "cwd": "${workspaceRoot}",
-            "pathToRDebugIDE": "${workspaceRoot}/bin/rdebug-ide",
-            "program": "${workspaceRoot}/bin/rails",
-            "args": [
-                "server"
-            ],
-            "env": {
-                "HOST": "127.0.0.1"
-            },
-            "useBundler": true,
-            "pathToBundler": "${workspaceRoot}/bin/bundle",
-            "showDebuggerOutput": true
+            "command": "rails",
+            "script": "server",
+            "useBundler": false,
+            "args": [],
+            "askParameters": false
         },
         {
-            "name": "Debug current file",
-            "type": "ruby-byebug",
+            "type": "rdbg",
+            "name": "Run rails server",
+            "rdbgPath": "bin/rdbg",
             "request": "launch",
-            "program": "${file}"
+            "command": "bin/rails",
+            "script": "server",
+            "useBundler": true,
+            "args": [],
+            "askParameters": false
+        },
+        {
+            "type": "rdbg",
+            "name": "Run bin/puma server",
+            "rdbgPath": "bin/rdbg",
+            "request": "launch",
+            "command": "bundle exec",
+            "script": "bin/puma",
+            "useBundler": true,
+            "args": [],
+            "askParameters": false
+        },
+        {
+            "type": "rdbg",
+            "name": "Run db:seed",
+            "rdbgPath": "bin/rdbg",
+            "request": "launch",
+            "command": "bin/rake",
+            "script": "db:seed:seeds_secretfiles",
+            "useBundler": false,
+            "args": [],
+            "askParameters": false
+        },
+        {
+            "type": "rdbg",
+            "name": "Debug current file with rdbg",
+            "request": "launch",
+            "command": "rails",
+            "script": "server",
+            "args": [],
+            "askParameters": true
+        },
+        {
+            "type": "rdbg",
+            "name": "Attach with rdbg (tcp 12345)",
+            "request": "attach",
+            "debugPort": "localhost:12345",
+            "localfsMap": "/app:${workspaceFolder}"
+        },
+        {
+            "type": "msedge",
+            "name": "http://127.0.0.1:3000/secret_files/secret_files/",
+            "request": "launch",
+            "url": "http://127.0.0.1:3000/secret_files/secret_files/"
+        },
+        {
+            "type": "msedge",
+            "name": "http://127.0.0.1:3000/secret_files_logins/",
+            "request": "launch",
+            "url": "http://127.0.0.1:3000/secret_files_logins/"
+        },
+        {
+            "type": "ruby_lsp",
+            "name": "Debug",
+            "request": "launch",
+            "program": "ruby ${file}",
+        },
+        {
+            "type": "ruby_lsp",
+            "request": "launch",
+            "name": "Debug test file",
+            "program": "ruby -Itest ${relativeFile}"
+        },
+        {
+            "type": "ruby_lsp",
+            "request": "attach",
+            "name": "Attach to existing server",
         }
     ]
 }

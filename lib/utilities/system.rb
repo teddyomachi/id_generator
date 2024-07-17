@@ -1,13 +1,16 @@
-# coding: utf-8
 require 'net/http'
 require 'uri'
+require 'yaml'
+require 'json'
 require 'open-uri'
 require 'const/vfs_const'
 require 'const/acl_const'
 require 'const/ssl_const'
 require 'const/stat_const'
 require 'utilities/database_utilities'
+require 'utilities/file_manager_utilities'
 require 'tasks/spin_location_manager'
+require 'exceptions/s5f_exception'
 
 module SystemTools
   include Vfs
@@ -23,58 +26,300 @@ module SystemTools
       if fsize < Vfs::ONE_KILO_BYTE or unit_s == 'B'
         size_string = fsize.to_s + 'B'
       elsif fsize < Vfs::ONE_MEGA_BYTE or unit_s == 'KB'
-        if (fsize.to_f / Vfs::ONE_KILO_BYTE) == (fsize / Vfs::ONE_KILO_BYTE)
-          size_string = (fsize / Vfs::ONE_KILO_BYTE).to_s + 'KB'
-        else
-          size_string = (fsize.to_f / Vfs::ONE_KILO_BYTE).round(1).to_s + 'KB'
-        end
+        size_string = if (fsize.to_f / Vfs::ONE_KILO_BYTE) == (fsize / Vfs::ONE_KILO_BYTE)
+                        (fsize / Vfs::ONE_KILO_BYTE).to_s + 'KB'
+                      else
+                        (fsize.to_f / Vfs::ONE_KILO_BYTE).round(1).to_s + 'KB'
+                      end
       elsif fsize < Vfs::ONE_GIGA_BYTE or unit_s == 'MB'
-        if (fsize.to_f / Vfs::ONE_MEGA_BYTE) == (fsize / Vfs::ONE_MEGA_BYTE)
-          size_string = (fsize / Vfs::ONE_MEGA_BYTE).to_s + 'MB'
-        else
-          size_string = (fsize.to_f / Vfs::ONE_MEGA_BYTE).round(1).to_s + 'MB'
-        end
+        size_string = if (fsize.to_f / Vfs::ONE_MEGA_BYTE) == (fsize / Vfs::ONE_MEGA_BYTE)
+                        (fsize / Vfs::ONE_MEGA_BYTE).to_s + 'MB'
+                      else
+                        (fsize.to_f / Vfs::ONE_MEGA_BYTE).round(1).to_s + 'MB'
+                      end
       elsif fsize < Vfs::ONE_TERA_BYTE or unit_s == 'GB'
-        if (fsize.to_f / Vfs::ONE_GIGA_BYTE) == (fsize / Vfs::ONE_GIGA_BYTE)
-          size_string = (fsize / Vfs::ONE_GIGA_BYTE).to_s + 'GB'
-        else
-          size_string = (fsize.to_f / Vfs::ONE_GIGA_BYTE).round(1).to_s + 'GB'
-        end
+        size_string = if (fsize.to_f / Vfs::ONE_GIGA_BYTE) == (fsize / Vfs::ONE_GIGA_BYTE)
+                        (fsize / Vfs::ONE_GIGA_BYTE).to_s + 'GB'
+                      else
+                        (fsize.to_f / Vfs::ONE_GIGA_BYTE).round(1).to_s + 'GB'
+                      end
       elsif fsize < Vfs::ONE_PETA_BYTE or unit_s == 'TB'
-        if (fsize.to_f / Vfs::ONE_TERA_BYTE) == (fsize / Vfs::ONE_TERA_BYTE)
-          size_string = (fsize / Vfs::ONE_TERA_BYTE).to_s + 'TB'
-        else
-          size_string = (fsize.to_f / Vfs::ONE_TERA_BYTE).round(1).to_s + 'TB'
-        end
+        size_string = if (fsize.to_f / Vfs::ONE_TERA_BYTE) == (fsize / Vfs::ONE_TERA_BYTE)
+                        (fsize / Vfs::ONE_TERA_BYTE).to_s + 'TB'
+                      else
+                        (fsize.to_f / Vfs::ONE_TERA_BYTE).round(1).to_s + 'TB'
+                      end
       end
-      return size_string
+      size_string
     end # => end of self.size_with_unit( fsize )
   end # => end of class Numeric
 
-  class DbTools
+  class ConfigurationTools
+    # Setup SecretFiles server
+    #   Initial virtual file system tree
+    #   Initial SpinDomains
+    #   root user and login environment
+    ##################### Obsoleted ###############################
+    def self.setup_secret_files(uid, passwd)
+      # Login as 'root'
+      sid = ''
+      begin
+        ret = LoginProc::Exec.spin_login_api uid, passwd
+        ret.blank? raise 'No user record for ROOT'
+        sid = ret[:session]
+      rescue StandardError
+        raise 'Failed to login as ROOT'
+      end
 
-    def self.build_sql_params table_name, conditions
+      # load configuration file for spin_domains.jsonc
+      fconf = File.open('config/spin_domains.jsonc')
+      spin_domain_conf = JSON.load(fconf)
+      fconf.close
+
+      # setup initial vftree
+      begin
+        reth = setup_initial_vftree(sid, spin_domain_conf)
+        reth.blank? raise "Failed to setup initial vftree in #{__method__}"
+      rescue StandardError
+        raise "Failed to setup initial vftree by exception in #{__method__}"
+      end
+    end
+    ##################### Obsoleted ###############################
+    # => end of self.setup_secret_files
+
+    # Add new client
+    #   set vftree architecture
+    #   set spin_domains
+    def self.add_new_client(sid, clname, cltype); end # => end of self.create_new_client
+
+    # Do this first
+    def self.setup_initial_vftree(session_id, spin_domain_confs)
+      # build initial vftree under root node
+      #   load initial vftree data in yaml
+      #
+      # 1. Create nodes for basic vftree
+
+      # initial values
+      depth = Vfs::ROOT_LEVEL_LAYER
+      acls = Acl::ACL_NODE_SUPERUSER_ACCESS
+      parent_domains = []
+      domain_nodes = []
+      rnode_coord = Vfs::NodeDoesNotExist
+
+      # sort by domain_level
+      spin_domain_confs.sort_by! { |x| x['domain_level'] }
+
+      # Through spin_domain_confs level 0 to level 4
+      spin_domain_confs.each do |spin_domain_conf|
+        # for each domain conf
+        dirname = spin_domain_conf['name']
+        vpath = dirname
+        depth = spin_domain_conf['domain_level']
+        did = spin_domain_conf['domain_id']
+        dtype = spin_domain_conf['domain_type']
+        dclass = spin_domain_conf['domain_class']
+        dispname = spin_domain_conf['display_name']
+        is_visible = dtype == Vfs::DOMAIN_VISIBLE
+        #  set [lower, upper) domain id
+        lower_domain_id = Vfs::LOWER_BOUND_FIXED_DOMAIN_ID
+        upper_domain_id = Vfs::UPPER_BOUND_FIXED_DOMAIN_ID
+        acls = {
+          user: Acl::ACL_NODE_SUPERUSER_ACCESS,
+          group: Acl::ACL_NODE_RWD_ACCESS,
+          world: Acl::ACL_NODE_NO_ACCESS
+        }
+        if (Vfs::ROOT_LEVEL_LAYER..Vfs::CLIENT_LEVEL_LAYER).cover?(depth)
+
+          if depth == Vfs::ROOT_LEVEL_LAYER
+            # root domain
+            rnode_coord = Spinapp::SpinNode.create_spin_root_node(session_id, dirname, acls, true, is_visible)
+
+          else
+            # dommains in [SERVICE_LEVEL_LAYER, CLIENT_LEVEL_LAYER]
+
+            # get parent domain
+            begin
+              parent_domain = Spinapp::SpinDomain.find_by!(spin_did: spin_domain_conf['parent_domain_id'])
+            rescue StandardError => e
+              S5fLib.print_exception(e, true)
+              raise "Failed to get parent domain #{spin_domain_conf['parent_domain_id']}"
+            end
+
+            dirname_separator = ''
+            dirname_separator = '/' unless parent_domain[:spin_domain_root] == '/'
+            vpath = parent_domain[:spin_domain_root] + dirname_separator + dirname
+            rnode_coord = SpinLocationManager.get_location_coordinates(session_id, Vfs::DEFAULT_FOLDER_CONT_LOCATION,
+                                                                       vpath, true, Vfs::ROOT_USER_ID, Vfs::ROOT_GROUP_ID,
+                                                                       (Acl::ACL_NODE_SUPERUSER_ACCESS | Acl::ACL_NODE_RWD_ACCESS |
+                                                                       Acl::ACL_NODE_NO_ACCESS), true, is_visible)
+
+            raise "Failed to create virtual node #{dirname}" if rnode_coord == Vfs::NoDirectoryNode
+
+          end
+          # end of if depth == Vfs::ROOT_LEVEL_LAYER else ... block
+
+          # set domain root flag to spin_node
+          ret = Spinapp::SpinNode.set_domain_root(session_id, rnode_coord[Vfs::K], Vfs::ROOT_USER_ID)
+
+          raise "Failed to set is_domain_root_node flag to spin_node:#{rnode_coord[Vfs::K]}" unless ret == true
+
+          # add spin_domain
+          reth = Spinapp::SpinDomain.secret_files_add_domain(session_id, Vfs::ROOT_USER_ID, Vfs::ROOT_GROUP_ID,
+                                                             did, dirname, dispname,
+                                                             rnode_coord[Vfs::K], vpath, dclass, dtype)
+          if reth[:success] == false && reth[:status] != Stat::INFO_SPIN_DOMAIN_EXISTS
+            raise 'Failed-secret_files_add_domain'
+          end
+
+          domain_nodes.push(rnode_coord)
+          next
+        else
+          # (vfs::ACCOUNT_LEVEL_LAYER..).cover?(depth)
+          # domains unsder ACCOUNT_LEVEL_LAYER
+
+          # get parent domains
+          parent_domains = []
+          pdid = spin_domain_conf['parent_domain_id']
+          # dynamic domains
+          # if domain_id < 0 then dmax = domain_id*(-1) is limit sup of domain_id.
+          # all the domains which have domain_id < dmax and depth == (domain_level-1)
+          # are parent domains.
+
+          # pdid has negative value
+          pdno = pdid * -1 if pdid.negative?
+
+          # Are parent domains within FIXED_DOMAIN_ID_RANGE?
+          if Vfs::FIXED_DOMAIN_ID_RANGE.cover?(pdno) && depth <= Vfs::ACCOUNT_LEVEL_LAYER
+            lower_domain_id = Vfs::LOWER_BOUND_FIXED_DOMAIN_ID
+            upper_domain_id = Vfs::UPPER_BOUND_FIXED_DOMAIN_ID
+          else
+            lower_domain_id = Vfs::LOWER_BOUND_DYNAMCI_DOMAIN_ID
+            upper_domain_id = Vfs::UPPER_BOUND_DYNAMIC_DOMAIN_ID
+          end
+
+          # get parent domains
+          parent_domains = Spinapp::SpinDomain.where('domain_level = ?', depth - 1)
+
+          #  create domains under parent domains
+          parent_domains.each do |pdd|
+            dirname_separator = ''
+            dirname_separator = '/' unless pdd[:spin_domain_root] == '/'
+            vpath = pdd[:spin_domain_root] + dirname_separator + dirname
+            rnode_coord = SpinLocationManager.get_location_coordinates(session_id, Vfs::DEFAULT_FOLDER_CONT_LOCATION,
+                                                                       vpath, true, Vfs::ROOT_USER_ID, Vfs::ROOT_GROUP_ID,
+                                                                       (Acl::ACL_NODE_SUPERUSER_ACCESS | Acl::ACL_NODE_RWD_ACCESS |
+                                                                       Acl::ACL_NODE_NO_ACCESS), true, is_visible)
+
+            raise "Failed to create virtual node #{dirname}" if rnode_coord == Vfs::NoDirectoryNode
+
+            # set domain root flag to spin_node
+            ret = Spinapp::SpinNode.set_domain_root(session_id,
+                                                    rnode_coord[Vfs::K], Vfs::ROOT_USER_ID)
+            raise "Failed to set is_domain_root_node flag to spin_node:#{rnode_coord[Vfs::K]}" unless ret == true
+
+            # add spin_domain
+            max_did = Spinapp::SpinDomain.where('spin_did >= ? AND spin_did < ?', lower_domain_id,
+                                                upper_domain_id).maximum(:spin_did)
+            max_did = max_did.blank? ? lower_domain_id : max_did + 1
+            reth = Spinapp::SpinDomain.secret_files_add_domain(session_id, Vfs::ROOT_USER_ID, Vfs::ROOT_GROUP_ID,
+                                                               max_did, dirname, dispname,
+                                                               rnode_coord[Vfs::K], vpath, depth, dclass, dtype)
+            domain_nodes.push(rnode_coord)
+          end
+          # end of parent_domains loop
+        end
+        # end of (vfs::ACCOUNT_LEVEL_LAYER..).cover?(depth)
+      rescue StandardError => e
+        S5fLib.print_exception(e, true)
+        raise "Failed create virtual node #{dirname}"
+      end
+      # end of spin_domain_confs.each
+      domain_nodes
+    end
+
+    def self.setup_client_vftree(session_id, spin_domain_confs)
+      # build initial vftree under root node
+      #   load initial vftree data in yamlspin_domain_level
+      #
+      # 1. Create nodes for basic vftree
+
+      # initial values
+      domain_nodes = []
+      parent_domains = []
+
+      spin_domain_confs.each do |spin_domain_conf|         # domains in levels
+        vspin_domains = spin_domain_conf['spin_domains']
+        vspin_domains.sort_by! { |x| x['domain_level'] }
+        vspin_domains.each do |spin_dommain|               # for each domain
+          # Create domains
+
+          dirname = spin_dommain['name']
+          rnode_coord = Vfs::NodeDoesNotExist
+          parent_domains = Spinapp::SpinDomain.where(domain_class: spin_dommain['domain_class'],
+                                                     domain_level: spin_dommain['domain_level'] - 1)
+
+          parent_domains.each do |pdd|
+            parent_vpath = pdd[:spin_domain_root]
+            is_visible = spin_domain_conf['domain_type'] == Vfs::DOMAIN_VISIBLE
+            acls = {
+              user: Acl::ACL_NODE_SUPERUSER_ACCESS,
+              group: Acl::ACL_NODE_RWD_ACCESS,
+              world: Acl::ACL_NODE_NO_ACCESS
+            }
+            dirname_separator = if pdd['pdname'] == '/'
+                                  ''
+                                else
+                                  '/'
+                                end
+            domain_dirname = parent_vpath + dirname_separator + dirname
+            rnode_coord = SpinLocationManager.get_location_coordinates(session_id, Vfs::DEFAULT_FOLDER_CONT_LOCATION,
+                                                                       domain_dirname, true, Vfs::ROOT_USER_ID, Vfs::ROOT_GROUP_ID, Acl::ACL_NODE_SUPERUSER_ACCESS, Acl::ACL_NODE_RWD_ACCESS, Acl::ACL_NODE_NO_ACCESS, true, is_visible)
+
+            raise "Failed to create virtual node #{dirname}" if rnode_coord == Vfs::NoDirectoryNode
+
+            rnode_coord.push(spin_dommain['domain_id'])
+            rnode_coord.push(spin_dommain['display_name'])
+            rnode_coord.push(spin_dommain['domain_level'])
+            rnode_coord.push(spin_dommain['domain_class'])
+            rnode_coord.push(spin_dommain['domain_type'])
+            domain_nodes.push(rnode_coord)
+
+            # set domain root flag to spin_node
+            ret = Spinapp::SpinNode.set_domain_root(session_id, rnode_coord[Vfs::K], Vfs::ROOT_USER_ID)
+            raise Run, "Failed to set is_domain_root_node flag to spin_node:#{rnode_coord[Vfs::K]}" unless ret == true
+          end
+        rescue StandardError
+          raise "Failed create virtual node #{dirname}"
+        end
+      end
+      domain_nodes
+    end
+    # => end of self.setup_basic_vftree
+  end # => end of class ConfigurationTools
+
+  # Database handling utilities
+  class DbTools
+    def self.build_sql_params(_table_name, conditions)
       #       get table column info
       #      query = "SELECT * FROM pg_attribute WHERE attrelid = \'#{table_name}\'::regclass;"
       #      dbcon = DatabaseUtility::VirtualFileSystemUtility.open_meta_db_connection
       #      res = dbcon.exec(query)
       #      DatabaseUtility::VirtualFileSystemUtility.close_meta_db_connection(dbcon)
-      conditions.each {|cond|
-
-      }
+      conditions.each do |cond|
+      end
     end
 
     # => end of build_sql_params 'spin_nodes', conditions
 
     def self.clear_databases
-      FolderDatum.destroy_all
-      TargetFolderDatum.destroy_all
-      FileDatum.destroy_all
-      DomainDatum.destroy_all
-      SpinSession.destroy_all
+      Spinapp::FolderDatum.destroy_all
+      Spinapp::TargetFolderDatum.destroy_all
+      Spinapp::FileDatum.destroy_all
+      Spinapp::DomainDatum.destroy_all
+      Spinapp::SpinSession.destroy_all
     end
 
-    def self.create_spin_attributes_master spin_attributes_master_name = 'spin_attributes_master'
+    def self.create_spin_attributes_master(spin_attributes_master_name = 'spin_attributes_master')
       conn = DatabaseUtility::VirtualFileSystemUtility.open_meta_db_connection
       query = \
         "CREATE TABLE #{spin_attributes_master_name} ( \n\
@@ -90,7 +335,7 @@ module SystemTools
 
     # => end of create_spin_attributes_master
 
-    def self.create_spin_attributes spin_attr_key_name, spin_attributes_master_name, constraints
+    def self.create_spin_attributes(spin_attr_key_name, spin_attributes_master_name, constraints)
       conn = DatabaseUtility::VirtualFileSystemUtility.open_meta_db_connection
       query = \
         "CREATE TABLE spin_attr_#{spin_attr_key_name}_tbl (\n\
@@ -106,20 +351,20 @@ module SystemTools
 
     # => end of create_spin_attributes
 
-    def self.create_spin_attributes_trigger_function spin_attr_key_names, spin_client_id
+    def self.create_spin_attributes_trigger_function(spin_attr_key_names, spin_client_id)
       conn = DatabaseUtility::VirtualFileSystemUtility.open_meta_db_connection
       query_trigger = \
         "CREATE OR REPLACE FUNCTION #{spin_attributes_master_name}_trigger()\n\
           RETURNS TRIGGER AS $$\n\
           BEGIN\n"
 
-      spin_attr_key_names.each_with_index {|attrkey, idx|
+      spin_attr_key_names.each_with_index do |attrkey, idx|
         if idx == 0
-          query_trigger << ("IF ( NEW." + attrkey + "= \'" + attrkey + "\'" + " AND NEW.spin_client_id = \'" + spin_client_id + "\' ) THEN\nINSERT INTO spin_attr_#{attrkey}_tbl VALUES (NEW.*);\n")
+          query_trigger << ('IF ( NEW.' + attrkey + "= '" + attrkey + "'" + " AND NEW.spin_client_id = '" + spin_client_id + "' ) THEN\nINSERT INTO spin_attr_#{attrkey}_tbl VALUES (NEW.*);\n")
         else
-          query_trigger << ("ELSIF ( NEW." + attrkey + "= \'" + attrkey + "\'" + " AND NEW.spin_client_id = \'" + spin_client_id + "\' ) THEN\nINSERT INTO spin_attr_#{attrkey}_tbl VALUES (NEW.*);\n")
+          query_trigger << ('ELSIF ( NEW.' + attrkey + "= '" + attrkey + "'" + " AND NEW.spin_client_id = '" + spin_client_id + "' ) THEN\nINSERT INTO spin_attr_#{attrkey}_tbl VALUES (NEW.*);\n")
         end
-      }
+      end
       query_trigger << ("END IF;\nRETURN NULL;\nEND;\n$$\nLANGUAGE plpgsql;")
 
       res = conn.exec query_trigger
@@ -128,7 +373,7 @@ module SystemTools
 
     # => end of create_spin_attributes_trigger_function
 
-    def self.create_spin_access_controls_master spin_attributes_master_name = 'spin_attributes_master'
+    def self.create_spin_access_controls_master(spin_attributes_master_name = 'spin_attributes_master')
       conn = DatabaseUtility::VirtualFileSystemUtility.open_meta_db_connection
       query = \
         "CREATE TABLE #{spin_attributes_master_name} ( \n\
@@ -144,7 +389,7 @@ module SystemTools
 
     # => end of create_spin_access_controls_master
 
-    def self.create_spin_access_controls spin_attr_key_name, spin_attributes_master_name, constraints
+    def self.create_spin_access_controls(spin_attr_key_name, spin_attributes_master_name, constraints)
       conn = DatabaseUtility::VirtualFileSystemUtility.open_meta_db_connection
       query = \
         "CREATE TABLE spin_attr_#{spin_attr_key_name}_tbl (\n\
@@ -160,20 +405,20 @@ module SystemTools
 
     # => end of create_spin_access_controls
 
-    def self.create_spin_access_controls_trigger_function spin_attr_key_names, spin_client_id
+    def self.create_spin_access_controls_trigger_function(spin_attr_key_names, spin_client_id)
       conn = DatabaseUtility::VirtualFileSystemUtility.open_meta_db_connection
       query_trigger = \
         "CREATE OR REPLACE FUNCTION #{spin_attributes_master_name}_trigger()\n\
           RETURNS TRIGGER AS $$\n\
           BEGIN\n"
 
-      spin_attr_key_names.each_with_index {|attrkey, idx|
+      spin_attr_key_names.each_with_index do |attrkey, idx|
         if idx == 0
-          query_trigger << ("IF ( NEW." + attrkey + "= \'" + attrkey + "\'" + " AND NEW.spin_client_id = \'" + spin_client_id + "\' ) THEN\nINSERT INTO spin_attr_#{attrkey}_tbl VALUES (NEW.*);\n")
+          query_trigger << ('IF ( NEW.' + attrkey + "= '" + attrkey + "'" + " AND NEW.spin_client_id = '" + spin_client_id + "' ) THEN\nINSERT INTO spin_attr_#{attrkey}_tbl VALUES (NEW.*);\n")
         else
-          query_trigger << ("ELSIF ( NEW." + attrkey + "= \'" + attrkey + "\'" + " AND NEW.spin_client_id = \'" + spin_client_id + "\' ) THEN\nINSERT INTO spin_attr_#{attrkey}_tbl VALUES (NEW.*);\n")
+          query_trigger << ('ELSIF ( NEW.' + attrkey + "= '" + attrkey + "'" + " AND NEW.spin_client_id = '" + spin_client_id + "' ) THEN\nINSERT INTO spin_attr_#{attrkey}_tbl VALUES (NEW.*);\n")
         end
-      }
+      end
       query_trigger << ("END IF;\nRETURN NULL;\nEND;\n$$\nLANGUAGE plpgsql;")
 
       res = conn.exec query_trigger
@@ -183,29 +428,29 @@ module SystemTools
     # => end of create_spin_access_controls_trigger_function
 
     def self.set_domain_root_node
-      ds = SpinDomain.find :all
-      if ds.length > 0
-        ds.each {|dr|
-          if dr[:spin_updated_at] == nil
-            dr[:spin_updated_at] = Time.now
-            dr.save
-          end
-          n = SpinNode.find_by_spin_node_hashkey dr[:domain_root_node_hashkey]
-          if n
-            n[:is_domain_root_node] = true
-            n.save
-          end
-        }
+      ds = Spinapp::SpinDomain.find :all
+      return unless ds.length > 0
+
+      ds.each do |dr|
+        if dr[:spin_updated_at].nil?
+          dr[:spin_updated_at] = Time.now
+          dr.save
+        end
+        n = Spinapp::SpinNode.find_by_spin_node_hashkey dr[:domain_root_node_hashkey]
+        if n
+          n[:is_domain_root_node] = true
+          n.save
+        end
       end
     end
 
     # => end of self.set_domain_root_node
 
-    def self.init_user_template user_template_name = nil
+    def self.init_user_template(user_template_name = nil)
       # DEFAULT_TEMPLATE_UNAME
       tmp = nil
       search_user_template_name = ''
-      if user_template_name == nil
+      if user_template_name.nil?
         user_template_name = Vfs::DEFAULT_TEMPLATE_UNAME
         search_user_template_name = Vfs::DEFAULT_TEMPLATE_UNAME + '-%'
       else
@@ -217,98 +462,93 @@ module SystemTools
       begin
         # sql = 'SELECT * FROM spin_users WHERE spin_uname LIKE \'template-user%\''
         default_template_user = user_template_name + '-0'
-        tmp = SpinUser.where(["spin_uname LIKE ?", search_user_template_name])
-        # tmp = SpinUser.find_by_sql(sql) # => (:all,:conditions=>["spin_uname LIKE \'?\'",search_user_template_name])
-        if tmp.size > 0
-          default_template_user = user_template_name + '-' + tmp.length.to_s
-        end
-        new_template = SpinUser.create {|ntmpl|
-          ntmpl[:spin_uid] = Vfs::DEFAUTL_TEMPLATE_UID + tmp.size
+        tmp = Spinapp::SpinUser.where(['spin_uname LIKE ?', search_user_template_name])
+        # tmp = Spinapp::SpinUser.find_by_sql(sql) # => (:all,:conditions=>["spin_uname LIKE \'?\'",search_user_template_name])
+        default_template_user = user_template_name + '-' + tmp.length.to_s if tmp.size > 0
+        new_template = Spinapp::SpinUser.create do |ntmpl|
+          ntmpl[:spin_uid] = Vfs::DEFAULT_TEMPLATE_UID + tmp.size
           ntmpl[:spin_gid] = Vfs::DEFAUTL_TEMPLATE_GID + tmp.size
           ntmpl[:spin_uname] = default_template_user
           ntmpl[:spin_projid] = Vfs::DEFAUTL_TEMPLATE_PROJID
-          ntmpl[:spin_passwd] = nil
+          ntmpl[:spin_password] = nil
           ntmpl[:user_level_x] = Vfs::DEFAULT_TEMPLATE_USER_LEVEL_X
           ntmpl[:user_level_y] = Vfs::DEFAULT_TEMPLATE_USER_LEVEL_Y
           default_login_directory_path = Vfs::SYSTEM_DEFAULT_LOGIN_DIRECTORY
-          loc = SpinLocationManager.get_location_coordinates Acl::ADMIN_SESSION_ID, 'folder_a', default_login_directory_path, true, Acl::ACL_SUPERUSER_UID, Acl::ACL_SUPERUSER_GID, Acl::ACL_DEFAULT_UID_ACCESS_RIGHT, Acl::ACL_DEFAULT_GID_ACCESS_RIGHT, Acl::ACL_DEFAULT_WORLD_ACCESS_RIGHT
+          loc = SpinLocationManager.get_location_coordinates Acl::ADMIN_SESSION_ID, 'folder_a',
+                                                             default_login_directory_path, true, Acl::ACL_SUPERUSER_UID, Acl::ACL_SUPERUSER_GID, Acl::ACL_DEFAULT_UID_ACCESS_RIGHT, Acl::ACL_DEFAULT_GID_ACCESS_RIGHT, Acl::ACL_DEFAULT_WORLD_ACCESS_RIGHT
           ntmpl[:spin_login_directory] = SpinLocationManager.location_to_key(loc, Vfs::NODE_DIRECTORY)
-          rd = SpinDomain.readonly.select("hash_key").find_by_spin_domain_name('personal')
-          if rd.blank?
-            rd = SpinDomain.readonly.select("hash_key").find_by_spin_domain_name('root')
-          end
+          rd = Spinapp::SpinDomain.readonly.select('hash_key').find_by_spin_domain_name('personal')
+          rd = Spinapp::SpinDomain.readonly.select('hash_key').find_by_spin_domain_name('root') if rd.blank?
           ntmpl[:spin_default_domain] = rd[:hash_key]
           ntmpl[:spin_default_server] = Vfs::SYSTEM_DEFAULT_SPIN_SERVER
-        }
+        end
       end
     end
 
     # => end of self.init_user_template
 
     def self.set_domain_root_node_flag
-      #      domains = SpinDomain.where(["id > 0"])
-      SpinDomain.find_each do |d|
-        begin
-          unless d.blank?
-            r = SpinNode.find_by_spin_node_hashkey d[:domain_root_node_hashkey]
-            if r.present? and r[:is_domain_root_node] == false
-              begin
-                r[:is_domain_root_node] = true
-                r.save
-              rescue ActiveRecord::RecordNotSaved
-                break
-              end
+      #      domains = Spinapp::SpinDomain.where(["id > 0"])
+      Spinapp::SpinDomain.find_each do |d|
+        unless d.blank?
+          r = Spinapp::SpinNode.find_by_spin_node_hashkey d[:domain_root_node_hashkey]
+          if r.present? and r[:is_domain_root_node] == false
+            begin
+              r[:is_domain_root_node] = true
+              r.save
+            rescue ActiveRecord::RecordNotSaved
+              break
             end
           end
-        rescue ActiveRecord::RecordNotFound
-          next
         end
+      rescue ActiveRecord::RecordNotFound => e
+        S5fLib.print_exception(e, true)
+        next
       end
     end
 
     # => end of self.set_domain_root_node_flag
 
     def self.set_spin_node_keeper_locks
-      begin
-        SpinNodeKeeperLock.find_or_create_by_id(1)
-      rescue ActiveRecord::RecordNotFound
-        Rails.logger 'Failed to find spin_node_keeper_locks record'
-      rescue
-        Rails.logger 'Failed to set spin_node_keeper_locks'
-      end
+      Spinapp::SpinNodeKeeperLock.find_or_create_by_id(1)
+    rescue ActiveRecord::RecordNotFound => e
+      S5fLib.print_exception(e, true)
+      FileManager.rails_logger 'Failed to find spin_node_keeper_locks record'
+    rescue StandardError
+      FileManager.rails_logger 'Failed to set spin_node_keeper_locks'
     end
 
-    def self.set_spin_storages ss_server = Vfs::SYSTEM_DEFAULT_SPIN_SERVER, ss_store_name = Vfs::SYSTEM_DEFAULT_STORAGE_NAME, ss_root = Vfs::SYSTEM_DEFAULT_STORAGE_ROOT, ss_vfs = Vfs::SYSTEM_DEFAULT_VFS_NAME, ss_ml = 'LEAST_FILES', ss_max_size = -1, ss_max_ent = -1, ss_max_dirs = -1, ss_max_ent_per_dir = 0, is_default = true, ss_storage_tmp = Vfs::SYSTEM_DEFAULT_TEMP_DIR
+    def self.set_spin_storages(ss_server = Vfs::SYSTEM_DEFAULT_SPIN_SERVER, ss_store_name = Vfs::SYSTEM_DEFAULT_STORAGE_NAME, ss_root = Vfs::SYSTEM_DEFAULT_STORAGE_ROOT, ss_vfs = Vfs::SYSTEM_DEFAULT_VFS_NAME, ss_ml = 'LEAST_FILES', ss_max_size = -1, ss_max_ent = -1, ss_max_dirs = -1, ss_max_ent_per_dir = 0, is_default = true, ss_storage_tmp = Vfs::SYSTEM_DEFAULT_TEMP_DIR)
       # => clear default flag
       default_recs = nil
       begin
-        default_recs = SpinStorage.where(["is_default = true"])
-        default_recs.each {|r|
+        default_recs = Spinapp::SpinStorage.where(['is_default = true'])
+        default_recs.each do |r|
           r[:is_default] = false
           r.save
-        }
-      rescue ActiveRecord::RecordNotFound
+        end
+      rescue ActiveRecord::RecordNotFound => e
+        S5fLib.print_exception(e, true)
       end
       # => get vfs
       spin_vfs_id = ''
-      vfs = SpinVirtualFileSystem.find_by_spin_vfs_name ss_vfs
-      if vfs != nil
-        spin_vfs_id = vfs[:spin_vfs_id]
-      else # => new spin_vfs
-        SpinVirtualFileSystem.transaction do
+      vfs = Spinapp::SpinVirtualFileSystem.find_by_spin_vfs_name ss_vfs
+      if vfs.nil? # => new spin_vfs
+        Spinapp::SpinVirtualFileSystem.transaction do
           default_vfs = nil
           begin
-            default_vfs = SpinVirtualFileSystem.where(["is_default = true"])
+            default_vfs = Spinapp::SpinVirtualFileSystem.where(['is_default = true'])
             if default_vfs.size > 0
-              default_vfs.each {|dfv|
+              default_vfs.each do |dfv|
                 dfv[:is_default] = false
                 dfv.save
-              }
+              end
             end
-          rescue ActiveRecord::RecordNotFound
+          rescue ActiveRecord::RecordNotFound => e
+            S5fLib.print_exception(e, true)
           end
-          spin_vfs_id = Security::hash_key_s(ss_vfs + Time.now.to_s)
-          new_vfs = SpinVirtualFileSystem.new
+          spin_vfs_id = Security.hash_key_s(ss_vfs + Time.now.to_s)
+          new_vfs = Spinapp::SpinVirtualFileSystem.new
           new_vfs[:spin_vfs_type] = 'LOAD_BALANCE'
           new_vfs[:spin_vfs_access_mode] = 'READ_WRITE'
           new_vfs[:spin_vfs_name] = ss_vfs
@@ -317,36 +557,38 @@ module SystemTools
           new_vfs[:is_default] = true
           new_vfs.save
         end
+      else
+        spin_vfs_id = vfs[:spin_vfs_id]
       end
       # => determine  vfs name
       same_storage_group_name = nil
       begin
-        same_storage_group_names = SpinStorage.find_by_storage_name ss_store_name
-        if same_storage_group_names != nil
+        same_storage_group_names = Spinapp::SpinStorage.find_by_storage_name ss_store_name
+        unless same_storage_group_names.nil?
           num = 1
-          while true do
+          while true
             ss_store_name_tmp = ss_store_name + '_' + num.to_s
-            if SpinStorage.find_by_storage_name(ss_store_name_tmp) != nil
-              num += 1
-              next
-            else
-              break
-            end
+            break if Spinapp::SpinStorage.find_by_storage_name(ss_store_name_tmp).nil?
+
+            num += 1
+            next
+
           end
           ss_store_name = ss_store_name + '_' + num.to_s
         end
-      rescue ActiveRecord::RecordNotFound
+      rescue ActiveRecord::RecordNotFound => e
+        S5fLib.print_exception(e, true)
       end
       # => create new root rec
       cnt = 1
       ss_root0 = ss_root
       while true
-        if Dir.exists? ss_root
+        if Dir.exist? ss_root
           ss_root = ss_root0 + cnt.to_s
           cnt += 1
         else
-          Dir.mkdir(ss_root, 0775)
-          Dir.mkdir(ss_root+'_thumbnail', 0775)
+          Dir.mkdir(ss_root, 0o775)
+          Dir.mkdir(ss_root + '_thumbnail', 0o775)
           break
         end
       end
@@ -354,16 +596,14 @@ module SystemTools
       last_id = 0
       last_rec = nil
       begin
-        last_rec = SpinStorage.select("id").readonly.find(:first).order("id DESC")
-        if last_rec.present?
-          last_id = last_rec[:id]
-        end
-      rescue ActiveRecord::RecordNotFound
+        last_rec = Spinapp::SpinStorage.select('id').readonly.find(:first).order('id DESC')
+        last_id = last_rec[:id] if last_rec.present?
+      rescue ActiveRecord::RecordNotFound => e
+        S5fLib.print_exception(e, true)
       end
 
-      SpinStorage.transaction do
-
-        rt = SpinStorage.new
+      Spinapp::SpinStorage.transaction do
+        rt = Spinapp::SpinStorage.new
         rt[:id] = last_id + 1
         rt[:storage_server] = ss_server
         rt[:storage_root] = ss_root
@@ -394,9 +634,12 @@ module SystemTools
         rt[:storage_group_max_entries] = ss_max_ent > 0 ? ss_max_ent / Vfs::MAX_INTEGER : Vfs::MAX_INTEGER_MASK
         rt[:storage_group_max_entries_sub] = ss_max_ent > 0 ? ss_max_ent % Vfs::MAX_INTEGER : Vfs::MAX_INTEGER_MASK
         rt[:storage_group_max_directories] = ss_max_dirs > 0 ? ss_max_dirs / Vfs::MAX_INTEGER : Vfs::MAX_INTEGER_MASK
-        rt[:storage_group_max_directories_sub] = ss_max_dirs > 0 ? ss_max_dirs % Vfs::MAX_INTEGER : Vfs::MAX_INTEGER_MASK
-        rt[:storage_group_max_entries_per_directory] = ss_max_ent_per_dir > 0 ? ss_max_ent_per_dir / Vfs::MAX_INTEGER : 0
-        rt[:storage_group_max_entries_per_directory_sub] = ss_max_ent_per_dir > 0 ? ss_max_ent_per_dir % Vfs::MAX_INTEGER : 1000
+        rt[:storage_group_max_directories_sub] =
+          ss_max_dirs > 0 ? ss_max_dirs % Vfs::MAX_INTEGER : Vfs::MAX_INTEGER_MASK
+        rt[:storage_group_max_entries_per_directory] =
+          ss_max_ent_per_dir > 0 ? ss_max_ent_per_dir / Vfs::MAX_INTEGER : 0
+        rt[:storage_group_max_entries_per_directory_sub] =
+          ss_max_ent_per_dir > 0 ? ss_max_ent_per_dir % Vfs::MAX_INTEGER : 1000
         rt[:is_master] = true
         rt[:thumbnail_root] = ''
         rt[:storage_tmp] = ss_storage_tmp
@@ -483,7 +726,7 @@ module SystemTools
 
         rt.save
 
-        tmrt = SpinStorage.new
+        tmrt = Spinapp::SpinStorage.new
         tmrt[:id] = last_id + 2
         tmrt[:storage_server] = ss_server
         tmrt[:storage_root] = ''
@@ -514,9 +757,12 @@ module SystemTools
         tmrt[:storage_group_max_entries] = ss_max_ent > 0 ? ss_max_ent / Vfs::MAX_INTEGER : Vfs::MAX_INTEGER_MASK
         tmrt[:storage_group_max_entries_sub] = ss_max_ent > 0 ? ss_max_ent % Vfs::MAX_INTEGER : Vfs::MAX_INTEGER_MASK
         tmrt[:storage_group_max_directories] = ss_max_dirs > 0 ? ss_max_dirs / Vfs::MAX_INTEGER : Vfs::MAX_INTEGER_MASK
-        tmrt[:storage_group_max_directories_sub] = ss_max_dirs > 0 ? ss_max_dirs % Vfs::MAX_INTEGER : Vfs::MAX_INTEGER_MASK
-        tmrt[:storage_group_max_entries_per_directory] = ss_max_ent_per_dir > 0 ? ss_max_ent_per_dir / Vfs::MAX_INTEGER : 0
-        tmrt[:storage_group_max_entries_per_directory_sub] = ss_max_ent_per_dir > 0 ? ss_max_ent_per_dir % Vfs::MAX_INTEGER : 1000
+        tmrt[:storage_group_max_directories_sub] =
+          ss_max_dirs > 0 ? ss_max_dirs % Vfs::MAX_INTEGER : Vfs::MAX_INTEGER_MASK
+        tmrt[:storage_group_max_entries_per_directory] =
+          ss_max_ent_per_dir > 0 ? ss_max_ent_per_dir / Vfs::MAX_INTEGER : 0
+        tmrt[:storage_group_max_entries_per_directory_sub] =
+          ss_max_ent_per_dir > 0 ? ss_max_ent_per_dir % Vfs::MAX_INTEGER : 1000
         tmrt[:is_master] = true
         tmrt[:thumbnail_root] = ss_root + '_thumbnail'
         tmrt[:storage_tmp] = Vfs::SYSTEM_DEFAULT_TEMP_DIR
@@ -545,19 +791,20 @@ module SystemTools
         tmrt.save
 
         # => set storege-vfs mapping
-        mp = nil
         begin
-          mp = SpinVfsStorageMapping.find_by_spin_vfs_and_spin_storage spin_vfs_id, storage_id
-        rescue ActiveRecord::RecordNotFound
-          mpnew = SpinVfsStorageMapping.new
+          mp = Spinapp::SpinVfsStorageMapping.find_by_spin_vfs_and_spin_storage spin_vfs_id, storage_id
+        rescue ActiveRecord::RecordNotFound => e
+          S5fLib.print_exception(e, true)
+          mpnew = Spinapp::SpinVfsStorageMapping.new
           mpnew[:spin_vfs] = spin_vfs_id
           mpnew[:spin_storage] = storage_id
           mpnew.save
         end
-      end # => end of transaction
-
-    end # => end of self.set_spin_storages
-
-  end # => end of class DbTools
-
-end # => end of module SystemTools
+      end
+      # => end of transaction
+    end
+    # => end of self.set_spin_storages
+  end
+  # => end of class DbTools
+end
+# => end of module SystemTools

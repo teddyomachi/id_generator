@@ -6,12 +6,12 @@ module SetUtility
   ARITH_LE = 5
 
   class SetOp
-    def self.is_in_set val, dom
+    def self.in_set? val, dom
       # val : value, :dom => domain array
       domr = [ val ]
-      
+
       domx = domr & dom
-      
+
       if domx.blank?
         return false
       else
@@ -28,10 +28,10 @@ module SetUtility
 #      }
 #      return false
     end # enf of is_in_set
-  
-    def self.is_subset_of s, dom
+
+    def self.subset_of? s, dom
       # :s => subset, :dom => domain array
-      # => returns array of common elements or nil 
+      # => returns array of common elements or nil
       if dom == nil or dom.length == 0
         return false
       end
@@ -42,7 +42,7 @@ module SetUtility
         return true
       end
     end
-  
+
     def compare_elements reg, qt, val
       reg.each { |r|
         case qt
@@ -73,7 +73,7 @@ module SetUtility
       return false
     end
   end # => end of SetOp class
-  
+
   def make_set(x,y,z)
     return [x,y,z]
   end

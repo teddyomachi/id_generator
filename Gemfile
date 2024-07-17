@@ -1,119 +1,167 @@
 source 'https://rubygems.org'
 git_source(:github) { |repo| "https://github.com/#{repo}.git" }
 
-ruby '~> 2.6'
+ruby '~> 3.3.0'
 
-# Bundle edge Rails instead: gem 'rails', github: 'rails/rails'
-gem 'rails', '~> 5.2.1'
+# Bundle edge Rails instead: gem "rails", github: "rails/rails", branch: "main"
+gem 'rails', '~> 7.1.3'
+gem 'activesupport', '~> 7.1'
+
+# The modern asset pipeline for Rails [https://github.com/rails/propshaft]
+gem 'propshaft'
+
 # Use postgresql as the database for Active Record
-gem 'pg', '>= 0.18', '< 2.0'
-# Use Puma as the app server
-gem 'puma', '~> 3.11'
-# Use SCSS for stylesheets
-gem 'sass-rails', '~> 5.0'
-# Use Uglifier as compressor for JavaScript assets
-gem 'uglifier', '>= 1.3.0'
-# See https://github.com/rails/execjs#readme for more supported runtimes
-# gem 'mini_racer', platforms: :ruby
 
-# Use CoffeeScript for .coffee assets and views
-gem 'coffee-rails', '~> 4.2'
-# Turbolinks makes navigating your web application faster. Read more: https://github.com/turbolinks/turbolinks
-gem 'turbolinks', '~> 5'
-# Build JSON APIs with ease. Read more: https://github.com/rails/jbuilder
-gem 'jbuilder', '~> 2.5'
+# Use the Puma web server [https://github.com/puma/puma]
+gem 'puma'
+
+# Use JavaScript with ESM import maps [https://github.com/rails/importmap-rails]
+gem 'importmap-rails'
+
+# Hotwire's SPA-like page accelerator [https://turbo.hotwired.dev]
+gem 'turbo-rails'
+
+# Hotwire's modest JavaScript framework [https://stimulus.hotwired.dev]
+gem 'stimulus-rails'
+
+# Build JSON APIs with ease [https://github.com/rails/jbuilder]
+gem 'jbuilder'
+
 # Use Redis adapter to run Action Cable in production
-# gem 'redis', '~> 4.0'
-# Use ActiveModel has_secure_password
-# gem 'bcrypt', '~> 3.1.7'
+gem 'redis', '~> 4.0'
 
-# Use ActiveStorage variant
-# gem 'mini_magick', '~> 4.8'
+# Use Kredis to get higher-level data types in Redis [https://github.com/rails/kredis]
+# gem "kredis"
 
-# Use Capistrano for deployment
-# gem 'capistrano-rails', group: :development
-
-# Reduces boot times through caching; required in config/boot.rb
-gem 'bootsnap', '>= 1.1.0', require: false
-
-# group :development, :test do
-#   # Call 'byebug' anywhere in the code to stop execution and get a debugger console
-#   gem 'byebug', platforms: [:mri, :mingw, :x64_mingw]
-# end
-
-group :development, :test do
-  # Call 'byebug' anywhere in the code to stop execution and get a debugger console
-  gem 'byebug', platforms: %i[mri mingw x64_mingw]
-  gem 'debase'
-  gem 'debase-ruby_core_source'
-  gem 'ruby-debug-ide'
-  gem 'rdebug'
-end
-
-
-group :development do
-  # Access an interactive console on exception pages or by calling 'console' anywhere in the code.
-  gem 'web-console', '>= 3.3.0'
-  gem 'listen', '>= 3.0.5', '< 3.2'
-  # Spring speeds up development by keeping your application running in the background. Read more: https://github.com/rails/spring
-  gem 'spring'
-  gem 'spring-watcher-listen', '~> 2.0.0'
-end
-
-group :test do
-  # Adds support for Capybara system testing and selenium driver
-  gem 'capybara', '>= 2.15'
-  gem 'selenium-webdriver'
-  # Easy installation and use of chromedriver to run system tests with Chrome
-  gem 'webdrivers'
-end
-
-# Use Capistrano for deployment
-# gem 'capistrano-rails', group: :development
-
-gem 'openssl', '~>2.1.1'
-
-# Use Capistrano for deployment
-gem 'cape', '~> 1.8'
-gem 'capistrano', '~> 3.10.1'
-gem 'capistrano-bundler', '~> 1.2.0'
-gem 'capistrano-deploytags', '~> 1.0', '>= 1.0.7'
-gem 'capistrano-ext', '~> 1.2.1'
-gem 'capistrano-rails', group: :development do
-  gem 'capistrano-rbenv', '~> 2.1', '>= 2.1.1'
-  gem 'capistrano_colors', '~> 0.5.5'
-  gem 'dsl', '~> 0.2.3'
-end
-
-gem 'rack-cors', require: 'rack/cors'
-
-# Bundle edge Rails instead:
-# gem 'rails', :git => 'git://github.com/rails/rails.git'
-
-gem 'libv8', '~> 8.4'
-
-gem 'json', '~> 2.1.0'
-
-# Gems for image handling
-gem 'rmagick', '~> 2.16.0'
-# gem 'rubysl-fileutils', '~> 2.0.3'
-# gem 'fileutils', '~> 0.7'
-gem 'streamio-ffmpeg', '~> 3.0.2'
-
-gem 'ffi', '~> 1.15.1'
-
-gem 'actionmailer', '~> 5.2'
-gem 'activemodel', '~> 5.2'
-gem 'activerecord', '~> 5.2'
-gem 'minitest', '~> 5.1'
-
-gem 'test-unit', '~> 3.2.4'
-
-group :development do
-  gem 'annotate' # generate models from definitions in schema.rb
-  gem 'rack-mini-profiler' # 簡易プロファイラ
-  gem 'solargraph'
-end
+# Use Active Model has_secure_password [https://guides.rubyonrails.org/active_model_basics.html#securepassword]
+gem 'bcrypt', '~> 3.1.7'
 
 # Windows does not include zoneinfo files, so bundle the tzinfo-data gem
-gem 'tzinfo-data', platforms: [:mingw, :mswin, :x64_mingw, :jruby]
+gem 'tzinfo-data', platforms: %i[mingw mswin x64_mingw jruby]
+
+# Reduces boot times through caching; required in config/boot.rb
+
+# Use Active Storage variants [https://guides.rubyonrails.org/active_storage_overview.html#transforming-images]
+gem 'image_processing', '~> 1.2'
+
+group :development, :test do
+  # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
+  gem 'debug', platforms: %i[mri mingw x64_mingw]
+  gem 'debug_inspector', '~> 1.1'
+  gem 'rspec-rails', '~> 6.0.0'
+  gem 'factory_bot_rails', '~> 6.2'
+
+  # Use console on exceptions pages [https://github.com/rails/web-console]
+  gem 'web-console', group: :development
+
+  # Add speed badges [https://github.com/MiniProfiler/rack-mini-profiler]
+  gem 'rack-mini-profiler'
+
+  gem 'solargraph', '~> 0.50.0'
+  gem 'ruby-lsp', '~> 0.14'
+  gem 'ruby-lsp-rails', require: false
+  gem 'ruby-lsp-rspec', require: false
+  gem 'rubocop'
+
+  gem 'prettier_print'
+  gem 'syntax_tree'
+  gem 'syntax_tree-haml'
+  gem 'syntax_tree-rbs'
+
+  gem 'rubocop-packaging'
+  gem 'rubocop-performance'
+  gem 'rubocop-shopify', require: false
+  gem 'rubocop-thread_safety'
+  # Speed up commands on slow machines / big apps [https://github.com/rails/spring]
+  # gem "spring"
+  gem 'appraisal', '~> 2.5'
+  gem 'capybara'
+  gem 'selenium-webdriver', '~> 4.11'
+  gem 'codeclimate-test-reporter', '~> 1.0', '>= 1.0.9'
+  gem 'guard', '~> 2.18', '>= 2.18.1'
+  gem 'listen', '~> 3.0', '>= 3.0.8'
+
+  gem 'rubocop-rspec', '~> 2.26'
+  gem 'rubocop-rails', '~> 2.23'
+  gem 'rubocop-ast', '~> 1.31'
+end
+
+# group :test do
+#   # Use system testing [https://guides.rubyonrails.org/testing.html#system-testing]
+#   gem 'capybara'
+#   gem 'selenium-webdriver', '~> 4.11'
+# end
+
+# Run against this stable release
+# group :development, :test do
+#   gem 'rspec-rails', '~> 6.0.0'
+#   gem "factory_bot_rails", "~> 6.2"
+# end
+
+gem 'capistrano', '~> 3.18'
+
+gem 'capistrano-rails', '~> 1.6'
+
+gem 'capistrano3-nginx', '~> 3.0'
+
+gem 'annotate', '~> 3.2'
+
+gem 'jsbundling-rails', '~> 1.2'
+
+gem 'cssbundling-rails', '~> 1.3'
+
+gem 'erb-formatter', '~> 0.4.3'
+
+gem 'gemojione', '~> 4.3'
+
+gem 'hotwire-rails', '~> 0.1.3'
+
+gem 'multi_json', '~> 1.15'
+
+gem 'rack-cors', '~> 2.0'
+
+gem 'dalli', '~> 3.2'
+
+
+gem 'bundler', '~> 2.5'
+
+gem 'yard', '~> 0.9.34'
+
+gem 'prism', '~> 0.24.0'
+
+gem 'htmlbeautifier', '~> 1.4'
+
+gem 'i18n', '~> 1.14'
+
+gem 'nkf', '~> 0.2.0'
+
+gem 'tailwindcss-rails', '~> 2.4'
+
+gem 'parser', '~> 3.3'
+
+gem "rmagick", "~> 6.0"
+
+gem "twilio-ruby", "~> 7.0"
+
+gem "rodauth-rails", "~> 1.14"
+
+gem "rotp", "~> 6.3"
+gem "rqrcode", "~> 2.2"
+
+gem "sequel", "~> 5.80"
+
+gem "sequel-activerecord_connection", "~> 1.4"
+
+gem "pg", "~> 1.5"
+
+gem "date", "~> 3.3"
+
+gem "rodauth-omniauth", "~> 0.3.4"
+gem "omniauth-facebook", "~> 10.0"
+gem "omniauth-google-oauth2", "~> 1.1"
+
+gem "localhost", "~> 1.3", :group => :development
+
+gem "faraday", "~> 2.9"
+
+gem "bootsnap", "~> 1.18"
